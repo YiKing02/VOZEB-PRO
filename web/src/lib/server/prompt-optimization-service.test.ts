@@ -11,6 +11,7 @@ vi.mock("@/lib/server/text-planning-runtime", () => ({
     rankTextPlanningCandidates: <T>(items: T[]) => items,
     requestStructuredText: vi.fn(),
 }));
+vi.mock("@/lib/server/user-newapi-config", () => ({ getUserGenerationSettings: vi.fn(async (settings: unknown) => settings) }));
 
 const candidate = {
     channelId: "text-channel",

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { normalizePositiveInteger, normalizePositiveNumber, normalizeVideoQuality } from "@/components/creative-generation-preference-fields";
-import { generationPreferenceSummary, generationRatioOptions, generationResolutionOptions, normalizeGenerationCount } from "@/components/creative-generation-preferences";
+import { generationPreferenceSummary, generationRatioOptions, generationResolutionOptions, imageResolutionForSize, imageSizeForResolution, normalizeGenerationCount } from "@/components/creative-generation-preferences";
 
 describe("generationPreferenceSummary", () => {
     it("keeps image, video and audio settings readable in one compact label", () => {
@@ -39,6 +39,14 @@ describe("generationPreferenceSummary", () => {
 
     it("keeps high-resolution image presets for a declared image ratio", () => {
         expect(generationRatioOptions("image", { aspectRatios: ["16:9"] }).map((option) => option.value)).toEqual(["auto", "16:9", "2048x1152", "3840x2160"]);
+    });
+
+    it("keeps image resolution and aspect ratio independently selectable", () => {
+        expect(imageSizeForResolution("2K", "16:9")).toBe("2048x1152");
+        expect(imageSizeForResolution("4K", "9:16")).toBe("2304x4096");
+        expect(imageSizeForResolution("1K", "2048x1152")).toBe("1024x576");
+        expect(imageResolutionForSize("2048x1152")).toBe("2K");
+        expect(imageResolutionForSize("3840x2160")).toBe("4K");
     });
 
     it("exposes the same positive custom pixel editor for images and videos", async () => {

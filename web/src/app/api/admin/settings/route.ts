@@ -40,6 +40,7 @@ export async function PATCH(request: Request) {
         if (typeof body.freeDailyPointsEnabled === "boolean") patch.freeDailyPointsEnabled = body.freeDailyPointsEnabled;
         if (typeof body.freeDailyPoints === "number") patch.freeDailyPoints = body.freeDailyPoints;
         if (body.mail) patch.mail = body.mail;
+        if (typeof body.allowUserApiConfig === "boolean") patch.allowUserApiConfig = body.allowUserApiConfig;
         if (body.modelPointCosts && typeof body.modelPointCosts === "object") patch.modelPointCosts = body.modelPointCosts;
         if (body.generationPointMultipliers && typeof body.generationPointMultipliers === "object") patch.generationPointMultipliers = body.generationPointMultipliers;
         if (body.generationCostControl && typeof body.generationCostControl === "object") patch.generationCostControl = body.generationCostControl;
@@ -99,6 +100,7 @@ const SETTINGS_PERMISSION_BY_FIELD = {
     dataLifecycle: "system.manage",
     freeDailyPointsEnabled: "billing.manage",
     freeDailyPoints: "billing.manage",
+    allowUserApiConfig: "upstream.manage",
     modelPointCosts: "billing.manage",
     generationPointMultipliers: "billing.manage",
     entitlements: "billing.manage",

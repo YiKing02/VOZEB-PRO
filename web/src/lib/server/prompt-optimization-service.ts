@@ -5,6 +5,7 @@ import { toSafeGenerationErrorMessage } from "@/lib/server/generation-errors";
 import { resolveLogicalModelCandidates } from "@/lib/server/logical-model-router";
 import { hasSystemAiCharge, readSystemAiBilling, systemAiBillingHeaders, systemAiIdempotencyKey } from "@/lib/server/system-ai-billing";
 import { rankTextPlanningCandidates, requestStructuredText } from "@/lib/server/text-planning-runtime";
+import { getUserGenerationSettings } from "@/lib/server/user-newapi-config";
 import { resolveSiteTitle } from "@/lib/site-brand";
 
 type PromptOptimizationMode = "agent" | CreativeGenerationMode;
@@ -20,7 +21,7 @@ export class PromptOptimizationError extends Error {
 }
 
 export async function optimizeCreativePrompt(input: { origin: string; cookie: string; userId: string; requestId: string; prompt: string; mode: PromptOptimizationMode }) {
-    const settings = await getAuthSettings();
+    const settings = await getUserGenerationSettings(await getAuthSettings(), input.userId);
     const model = settings.defaultModels.textModel;
     const candidates = resolveLogicalModelCandidates(settings, "text", model);
     if (!model || !candidates.length) throw new PromptOptimizationError("后台尚未配置可用的默认文本模型", 503);

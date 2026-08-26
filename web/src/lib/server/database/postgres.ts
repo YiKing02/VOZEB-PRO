@@ -15,6 +15,7 @@ const POSTGRES_TABLES = [
     "system_model_channels",
     "entitlement_plans",
     "users",
+    "user_newapi_configs",
     "sessions",
     "account_deletion_requests",
     "rate_limits",

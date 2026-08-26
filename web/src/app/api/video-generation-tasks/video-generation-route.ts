@@ -27,6 +27,7 @@ import { assertVozebRecommendedVideoReferences, buildVozebRecommendedVideoReques
 import { assertGeminiVideoReferences, buildGeminiVideoRequest, geminiVideoCreatePath, normalizeGeminiVideoDuration, parseGeminiVideoCreateResponse } from "@/lib/server/gemini-video-provider";
 import { systemAiBillingHeaders } from "@/lib/server/system-ai-billing";
 import { maintenanceWorkerContextHeaders, requestRuntimeCredential } from "@/lib/server/maintenance-auth";
+import { getUserGenerationSettings } from "@/lib/server/user-newapi-config";
 import { resolvePublicRequestOrigin } from "@/lib/server/public-request-origin";
 import { writeVideoGenerationLog } from "@/lib/server/video-task-log";
 import { buildOpenAiVideoFormData } from "./video-task-openai";
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
     if (headerRequestId) body.context = { ...(body.context || {}), clientRequestId: headerRequestId, ...(headerAttemptNo ? { attemptNo: headerAttemptNo } : {}) };
     const concurrencyRequestId = clean(body.context?.clientRequestId) || `video-request:${user.id}:${crypto.randomUUID()}`;
     body.context = { ...(body.context || {}), clientRequestId: concurrencyRequestId };
-    const settings = await getAuthSettings();
+    const settings = await getUserGenerationSettings(await getAuthSettings(), user.id);
     const response = await withGenerationConcurrencyLimit(
         user.id,
         "video",

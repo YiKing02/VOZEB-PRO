@@ -18,7 +18,7 @@ describe("profile coupon pagination", () => {
         expect(hook).toContain("includeTemplates: currentRequest.refreshTemplates || !couponTemplatesLoaded.current");
     });
 
-    it("renders compact pagination only when the coupon total exceeds one page", async () => {
+    it("keeps billing and coupon controls out of the workbench profile", async () => {
         const [wallet, page] = await Promise.all([readFile(resolve(process.cwd(), "src/app/(user)/profile/profile-coupon-wallet.tsx"), "utf8"), readFile(resolve(process.cwd(), "src/app/(user)/profile/page.tsx"), "utf8")]);
 
         expect(wallet).toContain("total > COUPON_PAGE_SIZE");
@@ -27,6 +27,8 @@ describe("profile coupon pagination", () => {
         expect(wallet).toContain("<Pagination");
         expect(wallet).toContain("current={page}");
         expect(wallet).toContain("onChange={onPageChange}");
-        expect(page).toContain("onClaimed={coupons.refreshAfterClaim}");
+        expect(page).not.toContain("onClaimed={coupons.refreshAfterClaim}");
+        expect(page).not.toContain("section=points");
+        expect(page).not.toContain("section=billing");
     });
 });

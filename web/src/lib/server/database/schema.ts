@@ -168,6 +168,20 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_version text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_url text;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS policy_accepted_at timestamptz;
 
+CREATE TABLE IF NOT EXISTS user_newapi_configs (
+    user_id text PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    base_url text NOT NULL,
+    api_key_ciphertext text NOT NULL,
+    models jsonb NOT NULL DEFAULT '[]'::jsonb,
+    model_capabilities jsonb NOT NULL DEFAULT '{}'::jsonb,
+    credentials jsonb NOT NULL DEFAULT '{}'::jsonb,
+    enabled boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE user_newapi_configs ADD COLUMN IF NOT EXISTS credentials jsonb NOT NULL DEFAULT '{}'::jsonb;
+
 UPDATE users
 SET admin_permissions = '${FULL_ADMIN_PERMISSIONS_JSON}'::jsonb
 WHERE id = (

@@ -54,7 +54,7 @@ export function synchronizeLogicalModelsWithChannels(existingModels: LogicalMode
         const bindings = catalogModel.bindings
             .map(({ channel, channelIndex, upstreamModel }) => {
                 const stored = findStoredBinding(existingModels, channel.id, upstreamModel);
-                const capabilityProfile = normalizeStoredCapabilityProfile(stored?.capabilityProfile);
+                const capabilityProfile = normalizeStoredCapabilityProfile(stored?.capabilityProfile) || inferredModelCapabilityProfile(catalogModel.capability, upstreamModel);
                 const weight = clampWeight(stored?.weight);
                 return {
                     id: text(stored?.id, 120) || `${channel.id}:${rawModelName(upstreamModel)}`,
@@ -159,7 +159,8 @@ export function channelDetectedCapabilities(channel: Pick<SystemModelChannel, "a
 }
 
 export function resolveLogicalModelCapabilityProfile(binding: Pick<LogicalModelBinding, "capabilityProfile">, capability: LogicalModelCapability, channel?: Pick<SystemModelChannel, "advancedConfig">, upstreamModel = "") {
-    if (!binding.capabilityProfile && !channel?.advancedConfig) return undefined;
+    const inferredProfile = inferredModelCapabilityProfile(capability, upstreamModel);
+    if (!binding.capabilityProfile && !channel?.advancedConfig && !inferredProfile) return undefined;
     const stored = binding.capabilityProfile || {};
     const advanced = channel?.advancedConfig;
     const globalPreset = resolveGlobalAiOpcPreset(advanced, upstreamModel);
@@ -170,7 +171,7 @@ export function resolveLogicalModelCapabilityProfile(binding: Pick<LogicalModelB
         supportsReferenceAudio: booleanValue(stored.supportsReferenceAudio, globalPreset?.supportsReferenceAudio ?? modelConfig?.supportsReferenceAudio ?? advanced?.supportsReferenceAudio),
         maxReferenceImages: positiveInteger(stored.maxReferenceImages),
         aspectRatios: normalizeAspectRatios(stored.aspectRatios),
-        resolutions: normalizeTextOptions(stored.resolutions, 20),
+        resolutions: normalizeTextOptions(stored.resolutions, 20) || inferredProfile?.resolutions,
         durationSeconds: normalizePositiveIntegers(stored.durationSeconds, 64),
         minDurationSeconds: positiveNumber(stored.minDurationSeconds),
         maxDurationSeconds: positiveNumber(stored.maxDurationSeconds),
@@ -183,6 +184,20 @@ export function resolveLogicalModelCapabilityProfile(binding: Pick<LogicalModelB
         unitCost: positiveNumber(stored.unitCost),
         unitCostCurrency: text(stored.unitCostCurrency, 12) || undefined,
     };
+}
+
+function inferredModelCapabilityProfile(capability: LogicalModelCapability, model: string): LogicalModelCapabilityProfile | undefined {
+    if (capability !== "video") return undefined;
+    const normalized = normalizeModelName(model);
+    if (/minimax[-_.\s]?h3|h3[-_.\s]?minimax/.test(normalized)) {
+        if (normalized.includes("2k")) return { resolutions: ["2K"] };
+        if (normalized.includes("480p")) return { resolutions: ["480"] };
+        if (normalized.includes("720p")) return { resolutions: ["720"] };
+        return undefined;
+    }
+    if (normalized.includes("kling") && !normalized.includes("turbo")) return { resolutions: ["720", "1080", "4K"] };
+    if (normalized.includes("kling") && normalized.includes("turbo")) return { resolutions: ["720", "1080"] };
+    return undefined;
 }
 
 function channelSupportsModel(channel: Pick<SystemModelChannel, "models">, model: string) {

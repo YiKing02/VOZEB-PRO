@@ -35,7 +35,15 @@ export async function queryVideoTaskUpstream(task: VideoTask, origin: string, co
     const status = readVideoProviderStatus(data, task.config.advancedConfig?.statusField);
     const resultUrl = readVideoProviderUrl(data, task.config.advancedConfig?.resultField);
     if (resultUrl || VIDEO_PROVIDER_SUCCESS.has(status)) {
-        return resultUrl ? { state: "result_ready", status: status || "completed", resultUrl } : { state: "failed", status: status || "completed", error: "视频任务已完成但没有返回视频地址" };
+        if (resultUrl) return { state: "result_ready", status: status || "completed", resultUrl };
+        // New API reports completion on GET /videos/:id and serves bytes from
+        // /videos/:id/content. Probe the content endpoint before treating a
+        // completed task without an inline URL as a provider failure.
+        if (task.config.advancedConfig?.protocol === "newapi") {
+            const contentPath = await readyVideoContentPath(task, origin, cookie, workerUserId);
+            if (contentPath) return { state: "result_ready", status: status || "completed", resultUrl: contentPath };
+        }
+        return { state: "failed", status: status || "completed", error: "视频任务已完成但没有返回视频地址" };
     }
     if (isProviderBusinessError(data) || VIDEO_PROVIDER_FAILED.has(status)) return { state: "failed", status: status || "failed", error: readProviderError(data) || "视频生成失败" };
     return { state: "pending", status: status || "processing" };

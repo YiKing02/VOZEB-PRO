@@ -27,7 +27,7 @@ export function HomeCta() {
 }
 
 export function HomeFooter() {
-    const { site, openBillingPlans, openProtectedPath } = useHomeActions();
+    const { site, openProtectedPath } = useHomeActions();
     const friendLinks = site.friendLinks.filter((item) => item.enabled && item.label.trim() && item.url.trim());
     const socials = Object.entries(site.socials).filter(([, item]) => item.enabled && item.label.trim() && item.url.trim());
     const copyright = site.footerCopyright?.trim();
@@ -67,10 +67,6 @@ export function HomeFooter() {
                             {group.items.map((item) =>
                                 item.action === "protected" ? (
                                     <button key={item.href} type="button" onClick={() => openProtectedPath(item.href)}>
-                                        {item.label}
-                                    </button>
-                                ) : item.action === "billing" ? (
-                                    <button key={item.href} type="button" onClick={openBillingPlans}>
                                         {item.label}
                                     </button>
                                 ) : (

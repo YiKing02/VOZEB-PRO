@@ -24,6 +24,7 @@ import { authorizeGenerationMediaProxyRequest } from "@/lib/server/generation-me
 import { SYSTEM_PROXY_JSON_BODY_MAX_BYTES } from "@/lib/server/system-proxy-request-limits";
 import { userOwnsGenerationUpstreamTask } from "@/lib/server/generation-task-authorization";
 import { authorizeSystemAiProxyRequest } from "@/lib/server/system-ai-proxy-policy";
+import { getUserGenerationSettings, getUserNewApiCredential, isUserNewApiChannel } from "@/lib/server/user-newapi-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,18 +67,20 @@ export async function DELETE(request: Request, context: RouteContext) {
 
 async function proxySystemRequest(request: Request, context: RouteContext) {
     const currentUser = await getCurrentUser();
-    const userId = currentUser?.id || authorizedWorkerUserId(request);
+    const workerUserId = authorizedWorkerUserId(request);
+    const userId = currentUser?.id || workerUserId;
     if (!userId) return NextResponse.json({ error: "请先登录" }, { status: 401 });
 
     const { channelId, path } = await context.params;
-    const settings = await getAuthSettings();
+    const maintenanceRequest = !currentUser && Boolean(workerUserId);
+    const settings = maintenanceRequest && !isUserNewApiChannel(channelId) ? await getAuthSettings() : await getUserGenerationSettings(await getAuthSettings(), userId);
     const channel = settings.systemChannels.find((item) => item.id === channelId && item.enabled);
     if (!channel || !channelConnectionReady(channel)) return NextResponse.json({ error: "默认接口未配置或已停用" }, { status: 404 });
 
     if (isMediaProxyPath(path)) {
         const rate = await checkMediaProxyRateLimit(userId, request);
         if (!rate.allowed) return NextResponse.json({ error: "媒体访问过于频繁，请稍后重试" }, { status: 429, headers: rateLimitHeaders(rate) });
-        return proxySystemMediaRequest(request, channel, userId);
+        return proxySystemMediaRequest(request, channel, userId, false);
     }
 
     const contentType = request.headers.get("content-type");
@@ -98,6 +101,7 @@ async function proxySystemRequest(request: Request, context: RouteContext) {
     const globalPreset = resolveGlobalAiOpcPreset(channel.advancedConfig, upstreamModel) || resolveGlobalAiOpcPathPreset(channel.advancedConfig, path);
     const globalAdaptation = adaptGlobalAiOpcTextRequest(channel.advancedConfig, path, requestBody.body);
     if (globalAdaptation === "responses-unsupported") return NextResponse.json({ error: "该 GlobalAiOpc 原生文本接口不支持 Responses，已切换 Chat 兼容回退。" }, { status: 404 });
+    const personalNewApi = isUserNewApiChannel(channel.id);
     const pointsRequest =
         classifyPointsRequest(request.method, apiFormat, path, contentType, requestBody.pointsPayload, settings.generationPointMultipliers) ||
         classifyConfiguredPointsRequest(
@@ -138,8 +142,16 @@ async function proxySystemRequest(request: Request, context: RouteContext) {
         if (!owned) return NextResponse.json({ error: "任务不存在或无权访问" }, { status: 404 });
     }
 
-    const target = targetUrl(globalPreset?.baseUrl || channel.baseUrl, globalPreset?.apiFormat || apiFormat, globalAdaptation?.path || path, new URL(request.url).search, globalChannel, modelConfig?.protocol || channel.advancedConfig?.protocol);
-    if (!(await isSafeOutboundUrl(target, { allowCredentials: false }))) return NextResponse.json({ error: "接口地址不允许访问内网或保留地址" }, { status: 400 });
+    const personalCredential = personalNewApi ? await getUserNewApiCredential(userId, access.capability) : null;
+    const target = targetUrl(
+        globalPreset?.baseUrl || personalCredential?.baseUrl || channel.baseUrl,
+        globalPreset?.apiFormat || apiFormat,
+        globalAdaptation?.path || path,
+        new URL(request.url).search,
+        globalChannel,
+        modelConfig?.protocol || channel.advancedConfig?.protocol,
+    );
+    if (!(await isSafeOutboundUrl(target, { allowCredentials: false, allowPrivateUpstreams: false }))) return NextResponse.json({ error: "接口地址不允许访问内网或保留地址" }, { status: 400 });
     const headers = new Headers();
     if (contentType && !isMultipart) headers.set("content-type", contentType);
     if (accept) headers.set("accept", accept);
@@ -148,22 +160,23 @@ async function proxySystemRequest(request: Request, context: RouteContext) {
     if (idempotencyKey) headers.set("idempotency-key", idempotencyKey);
     if (clientRequestId) headers.set("x-client-request-id", clientRequestId);
     const authConfig = modelConfig?.protocol ? { ...channel.advancedConfig, protocol: modelConfig.protocol } : channel.advancedConfig;
-    Object.entries(protocolAuthHeaders(channel.apiKey, authConfig, globalChannel ? "openai" : apiFormat)).forEach(([key, value]) => headers.set(key, value));
+    Object.entries(protocolAuthHeaders(personalCredential?.apiKey || channel.apiKey, authConfig, globalChannel ? "openai" : apiFormat)).forEach(([key, value]) => headers.set(key, value));
     const callType = `${access.capability}:${access.operation}:/${(globalAdaptation?.path || path).join("/")}`;
     const businessRequestId = readVerifiedSystemAiBusinessRequestId(request.headers, access.logicalModelId, upstreamModel) || `direct:${randomUUID()}`;
-    const pointsIdempotencyKey = pointsRequest ? systemAiPointsIdempotencyKey({ userId, businessRequestId, logicalModel: access.logicalModelId, channelId: channel.id, upstreamModel, callType }) : undefined;
-    const requestFingerprint = pointsRequest
-        ? systemAiRequestFingerprint({
-              method: request.method,
-              callType,
-              logicalModel: access.logicalModelId,
-              channelId: channel.id,
-              upstreamModel,
-              usageKind: pointsRequest.usageKind,
-              amount: pointsRequest.amount,
-              bodyDigest: requestBody.bodyDigest,
-          })
-        : undefined;
+    const pointsIdempotencyKey = pointsRequest && !personalNewApi ? systemAiPointsIdempotencyKey({ userId, businessRequestId, logicalModel: access.logicalModelId, channelId: channel.id, upstreamModel, callType }) : undefined;
+    const requestFingerprint =
+        pointsRequest && !personalNewApi
+            ? systemAiRequestFingerprint({
+                  method: request.method,
+                  callType,
+                  logicalModel: access.logicalModelId,
+                  channelId: channel.id,
+                  upstreamModel,
+                  usageKind: pointsRequest.usageKind,
+                  amount: pointsRequest.amount,
+                  bodyDigest: requestBody.bodyDigest,
+              })
+            : undefined;
     let pointsResult: Awaited<ReturnType<typeof consumeUserPoints>> | null = null;
     let refundedPointsRemaining: number | null = null;
     let pointsSettled = false;
@@ -173,7 +186,7 @@ async function proxySystemRequest(request: Request, context: RouteContext) {
         const refundedUser = await refundUserPoints(userId, pointsResult.model, pointsResult.cost, pointsResult.usageKind, pointsResult.units, undefined, pointsResult.recordId);
         refundedPointsRemaining = typeof refundedUser?.pointsBalance === "number" ? refundedUser.pointsBalance : null;
     };
-    if (pointsRequest) {
+    if (pointsRequest && !personalNewApi) {
         try {
             pointsResult = await consumeUserPoints(userId, access.logicalModelId, pointsRequest.amount, pointsRequest.usageKind, pointsIdempotencyKey, requestFingerprint);
         } catch (error) {
@@ -186,14 +199,18 @@ async function proxySystemRequest(request: Request, context: RouteContext) {
 
     let upstream: Response;
     try {
-        upstream = await fetchSafeOutbound(target, {
-            method: request.method,
-            headers,
-            body: globalAdaptation?.body || requestBody.body,
-            cache: "no-store",
-            redirect: "manual",
-            signal: request.signal,
-        });
+        upstream = await fetchSafeOutbound(
+            target,
+            {
+                method: request.method,
+                headers,
+                body: globalAdaptation?.body || requestBody.body,
+                cache: "no-store",
+                redirect: "manual",
+                signal: request.signal,
+            },
+            { allowCredentials: false, allowPrivateUpstreams: false },
+        );
     } catch (error) {
         await refundConsumedPoints();
         console.error("System API proxy request failed", error instanceof Error ? error.message : error);
@@ -262,13 +279,13 @@ function channelHasModel(models: string[], requested: string) {
 
 type SystemMediaChannel = { id: string; baseUrl: string; apiFormat: ApiCallFormat; apiKey: string; advancedConfig?: import("@/lib/auth/store").SystemChannelAdvancedConfig };
 
-async function proxySystemMediaRequest(request: Request, channel: SystemMediaChannel, userId: string) {
+async function proxySystemMediaRequest(request: Request, channel: SystemMediaChannel, userId: string, allowPrivateUpstreams: boolean) {
     if (request.method !== "GET" && request.method !== "HEAD") return NextResponse.json({ error: "Media proxy only supports GET and HEAD" }, { status: 405 });
     const rawUrl = new URL(request.url).searchParams.get("url") || "";
     if (!(await authorizeGenerationMediaProxyRequest(request, { userId, channelId: channel.id, url: rawUrl }))) return NextResponse.json({ error: "媒体路径未获任务授权" }, { status: 403 });
     const target = mediaTargetRequest(channel.baseUrl, channel.apiFormat, rawUrl, isGlobalAiOpcChannel(channel.advancedConfig));
     if (!target) return NextResponse.json({ error: "Invalid media url" }, { status: 400 });
-    if (!(await isSafeOutboundUrl(target.url, { allowCredentials: false }))) return NextResponse.json({ error: "媒体地址不允许访问内网或保留地址" }, { status: 400 });
+    if (!(await isSafeOutboundUrl(target.url, { allowCredentials: false, allowPrivateUpstreams }))) return NextResponse.json({ error: "媒体地址不允许访问内网或保留地址" }, { status: 400 });
     const range = normalizeMediaProxyRange(request.headers.get("range"));
     if (range === "invalid") return NextResponse.json({ error: "Invalid media range" }, { status: 416 });
     const permit = acquireMediaConcurrency("proxy", `user:${userId}`);
@@ -290,7 +307,7 @@ async function proxySystemMediaRequest(request: Request, channel: SystemMediaCha
             fetcher: (nextMethod, nextRange) => {
                 const requestHeaders = new Headers(headers);
                 if (nextRange) requestHeaders.set("range", nextRange);
-                return fetchSystemMedia(target, nextMethod, requestHeaders, signal);
+                return fetchSystemMedia(target, nextMethod, requestHeaders, signal, { allowPrivateUpstreams });
             },
         });
         const response = new Response(media.body, {
@@ -311,15 +328,15 @@ async function proxySystemMediaRequest(request: Request, channel: SystemMediaCha
     }
 }
 
-async function fetchSystemMedia(target: { url: string; includeAuth: boolean }, method: "GET" | "HEAD", baseHeaders: Headers, signal: AbortSignal) {
+async function fetchSystemMedia(target: { url: string; includeAuth: boolean }, method: "GET" | "HEAD", baseHeaders: Headers, signal: AbortSignal, options: { allowPrivateUpstreams: boolean }) {
     let currentUrl = target.url;
     let includeAuth = target.includeAuth;
     for (let redirects = 0; redirects <= MAX_SYSTEM_MEDIA_REDIRECTS; redirects += 1) {
-        if (!(await isSafeOutboundUrl(currentUrl, { allowCredentials: false }))) throw new Error("Unsafe media redirect");
+        if (!(await isSafeOutboundUrl(currentUrl, { allowCredentials: false, allowPrivateUpstreams: options.allowPrivateUpstreams }))) throw new Error("Unsafe media redirect");
         const headers = includeAuth ? new Headers(baseHeaders) : new Headers();
         const range = baseHeaders.get("range");
         if (range) headers.set("range", range);
-        const upstream = await fetchSafeOutbound(currentUrl, { method, headers, cache: "no-store", redirect: "manual", signal });
+        const upstream = await fetchSafeOutbound(currentUrl, { method, headers, cache: "no-store", redirect: "manual", signal }, { allowCredentials: false, allowPrivateUpstreams: options.allowPrivateUpstreams });
         if (!isRedirectStatus(upstream.status)) return upstream;
         const location = upstream.headers.get("location");
         await upstream.body?.cancel().catch(() => undefined);

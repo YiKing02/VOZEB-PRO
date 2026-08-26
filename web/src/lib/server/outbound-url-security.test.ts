@@ -46,4 +46,12 @@ describe("outbound url security", () => {
         await expect(isSafeOutboundUrl("http://169.254.169.254/latest/meta-data")).resolves.toBe(false);
         await expect(isSafeOutboundUrl("http://metadata.google.internal/computeMetadata/v1")).resolves.toBe(false);
     });
+
+    it("does not apply the server private-upstream allowlist to user supplied targets", async () => {
+        vi.stubEnv("VOZEB_PRO_ALLOW_PRIVATE_UPSTREAMS", "1");
+        vi.stubEnv("VOZEB_PRO_PRIVATE_UPSTREAM_HOSTS", "provider.internal");
+        mocks.lookup.mockResolvedValue([{ address: "10.0.0.8", family: 4 }]);
+
+        await expect(isSafeOutboundUrl("https://provider.internal/v1/models", { allowPrivateUpstreams: false })).resolves.toBe(false);
+    });
 });

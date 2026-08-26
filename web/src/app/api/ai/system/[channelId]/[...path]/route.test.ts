@@ -31,6 +31,11 @@ vi.mock("@/lib/server/security", () => ({
     isSafeOutboundUrl: mocks.safeUrl,
     rateLimitHeaders: vi.fn(() => ({ "Retry-After": "60" })),
 }));
+vi.mock("@/lib/server/user-newapi-config", () => ({
+    getUserGenerationSettings: vi.fn(async (settings: unknown) => settings),
+    getUserNewApiCredential: vi.fn(async () => null),
+    isUserNewApiChannel: (channelId: string) => channelId === "user-newapi",
+}));
 
 import { GET, maxDuration, POST, PUT } from "./route";
 import { CREATIVE_UPLOAD_MAX_BYTES } from "@/lib/creative-upload";
@@ -923,6 +928,36 @@ describe("system proxy authorization", () => {
 
         expect(response.status).toBe(405);
         expect(fetchMock).not.toHaveBeenCalled();
+        expect(mocks.consumeUserPoints).not.toHaveBeenCalled();
+    });
+
+    it("forwards a personal New API request without consuming VOZEB points", async () => {
+        mocks.getAuthSettings.mockResolvedValue({
+            generationPointMultipliers: {},
+            logicalModels: [
+                {
+                    id: "image-model",
+                    name: "image-model",
+                    capability: "image",
+                    enabled: true,
+                    bindings: [{ id: "image-binding", channelId: "user-newapi", upstreamModel: "vendor-image", enabled: true, priority: 1 }],
+                },
+            ],
+            systemChannels: [{ id: "user-newapi", enabled: true, baseUrl: "https://newapi.example.com/v1", apiKey: "fixture-key", apiFormat: "openai", models: ["vendor-image"], advancedConfig: { protocol: "newapi" } }],
+        });
+        const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json({ data: [{ url: "https://cdn.example.com/image.png" }] }));
+
+        const response = await POST(
+            new Request("http://localhost/api/ai/system/user-newapi/images/generations", {
+                method: "POST",
+                headers: { "content-type": "application/json", ...systemModelHeaders("image-model", "vendor-image") },
+                body: JSON.stringify({ model: "vendor-image", prompt: "test" }),
+            }),
+            { params: Promise.resolve({ channelId: "user-newapi", path: ["images", "generations"] }) },
+        );
+
+        expect(response.status, await response.clone().text()).toBe(200);
+        expect(fetchMock).toHaveBeenCalledOnce();
         expect(mocks.consumeUserPoints).not.toHaveBeenCalled();
     });
 });

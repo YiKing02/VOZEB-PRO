@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { DEFAULT_SITE_SETTINGS, getAuthSettings } from "@/lib/auth/store";
 import { getCurrentUser, serializeCurrentUser, serializePublicSettings } from "@/lib/auth/session";
 import { getInstallStatus } from "@/lib/server/install-status";
+import { getUserGenerationSettings } from "@/lib/server/user-newapi-config";
 
 export const runtime = "nodejs";
 
@@ -16,7 +17,7 @@ export async function GET() {
 
     if (user) {
         try {
-            const settings = await getAuthSettings();
+            const settings = await getUserGenerationSettings(await getAuthSettings(), user.id);
             return NextResponse.json({
                 user: serializeCurrentUser(user),
                 settings: serializePublicSettings(settings),

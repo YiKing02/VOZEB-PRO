@@ -22,7 +22,7 @@ export class UnsafeOutboundUrlError extends Error {
     }
 }
 
-export async function fetchSafeOutbound(input: string | URL, init: RequestInit = {}, options?: { allowCredentials?: boolean }): Promise<Response> {
+export async function fetchSafeOutbound(input: string | URL, init: RequestInit = {}, options?: { allowCredentials?: boolean; allowPrivateUpstreams?: boolean }): Promise<Response> {
     let currentUrl: URL;
     try {
         currentUrl = input instanceof URL ? new URL(input) : new URL(input);
@@ -51,7 +51,7 @@ export async function fetchSafeOutbound(input: string | URL, init: RequestInit =
     throw new UnsafeOutboundUrlError("上游重定向次数过多");
 }
 
-async function fetchPinned(input: URL, init: RequestInit, options?: { allowCredentials?: boolean }) {
+async function fetchPinned(input: URL, init: RequestInit, options?: { allowCredentials?: boolean; allowPrivateUpstreams?: boolean }) {
     const target = await resolveSafeOutboundTarget(input, options);
     if (!target) throw new UnsafeOutboundUrlError();
 

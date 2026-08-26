@@ -2,32 +2,26 @@
 
 import type { ReactNode } from "react";
 import { Button, Input, Pagination, Select, Spin, Tag } from "antd";
-import { CreditCard, History, ReceiptText, RefreshCw, Save, ShieldCheck, TicketPercent, UserCircle, UserPlus, WalletCards } from "lucide-react";
+import { KeyRound, Save, ShieldCheck, UserCircle, WalletCards } from "lucide-react";
 
-import { CreditSymbol, formatCreditAmount } from "@/constant/credits";
-import { BillingPlanGrid } from "@/components/billing/billing-plan-grid";
+import { formatCreditAmount } from "@/constant/credits";
 import { CompactEmptyState } from "@/components/compact-empty-state";
 import { cn } from "@/lib/utils";
-import { type BillingOrder, type BillingOrderStatus, type BillingProduct } from "@/services/api/billing";
+import { type BillingOrder, type BillingOrderStatus } from "@/services/api/billing";
 import type { PointRecord } from "@/services/api/points";
 import { useUserStore } from "@/stores/use-user-store";
 import { ProfileAvatarUploader } from "@/components/profile/profile-avatar-uploader";
 
-export type ProfileSectionKey = "overview" | "profile" | "billing" | "coupons" | "referrals" | "orders" | "consume" | "points" | "security";
+export type ProfileSectionKey = "overview" | "profile" | "api" | "security" | "coupons" | "referrals" | "orders" | "consume" | "points";
 
 export const RECORD_PAGE_SIZE = 8;
 export const ORDER_PAGE_SIZE = 8;
 export const COUPON_PAGE_SIZE = 8;
 
 export const profileSections: Array<{ key: ProfileSectionKey; label: string; description: string; shortDescription: string; icon: ReactNode }> = [
-    { key: "overview", label: "账户概览", description: "查看当前套餐、积分余额、最近订单和最近积分流水。", shortDescription: "资产摘要", icon: <WalletCards className="size-4" /> },
+    { key: "overview", label: "账户概览", description: "查看账号资料与接口连接状态。", shortDescription: "账号状态", icon: <WalletCards className="size-4" /> },
     { key: "profile", label: "个人资料", description: "维护头像、显示昵称和个人简介。", shortDescription: "头像与资料", icon: <UserCircle className="size-4" /> },
-    { key: "billing", label: "套餐中心", description: "在个人中心内选择套餐，支付时进入独立安全结算页。", shortDescription: "购买套餐", icon: <CreditCard className="size-4" /> },
-    { key: "coupons", label: "我的优惠券", description: "领取优惠券并查看可用、锁定、已使用和过期状态。", shortDescription: "领取与状态", icon: <TicketPercent className="size-4" /> },
-    { key: "orders", label: "订单记录", description: "查看所有充值订单、支付状态和开通结果。", shortDescription: "收款状态", icon: <ReceiptText className="size-4" /> },
-    { key: "points", label: "积分记录", description: "查看每日积分、充值赠送、退款退回和管理员调整流水。", shortDescription: "余额流水", icon: <CreditSymbol className="text-sm" /> },
-    { key: "consume", label: "消费记录", description: "查看模型调用、生成任务和接口消费扣除。", shortDescription: "积分扣除", icon: <History className="size-4" /> },
-    { key: "referrals", label: "邀请有礼", description: "复制邀请码和邀请链接，查看注册、首单与奖励进度。", shortDescription: "拉新与奖励", icon: <UserPlus className="size-4" /> },
+    { key: "api", label: "接口配置", description: "管理当前账号的 New API 接口。", shortDescription: "URL 与 Key", icon: <KeyRound className="size-4" /> },
     { key: "security", label: "账户与安全", description: "管理绑定邮箱、登录密码和个人数据。", shortDescription: "邮箱、密码与 MFA", icon: <ShieldCheck className="size-4" /> },
 ];
 
@@ -81,34 +75,6 @@ export function ProfileSectionNav({ activeKey, onChange, mode }: { activeKey: Pr
                 </div>
             </div>
         </aside>
-    );
-}
-
-export function BillingCenterSection({ products, productsLoading, onRefresh, onCheckout }: { products: BillingProduct[]; productsLoading: boolean; onRefresh: () => void; onCheckout: (product: BillingProduct) => void }) {
-    return (
-        <section className="rounded-lg border border-border bg-card p-2 text-card-foreground sm:rounded-2xl sm:p-6">
-            <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                    <h2 className="text-lg font-semibold tracking-tight text-stone-950 sm:text-xl dark:text-white">套餐中心</h2>
-                    <p className="mt-1 text-xs leading-5 text-stone-500 sm:text-sm sm:leading-6 dark:text-stone-400">选择适合当前创作频率的方案，结算时进入独立安全支付页。</p>
-                </div>
-                <Button className={`${profileSecondaryButtonClass} shrink-0`} icon={<RefreshCw className="size-4" />} onClick={onRefresh} loading={productsLoading}>
-                    <span className="hidden sm:inline">刷新</span>
-                </Button>
-            </div>
-            <div className="mt-2 border-t border-stone-200 pt-2 sm:mt-4 sm:pt-4 dark:border-stone-800">
-                <div className="flex items-end justify-between gap-3">
-                    <div className="min-w-0">
-                        <h3 className="text-base font-semibold text-stone-950 dark:text-white">可选套餐</h3>
-                        <p className="mt-1 hidden text-sm text-stone-500 sm:block dark:text-stone-400">价格、积分与有效期均同步后台已上架商品。</p>
-                    </div>
-                    {!productsLoading && products.length ? <span className="shrink-0 text-xs text-stone-400 dark:text-stone-500">共 {products.length} 个方案</span> : null}
-                </div>
-                <div className="mt-2 sm:mt-4">
-                    {productsLoading ? <LoadingBlock /> : products.length ? <BillingPlanGrid products={products} onSelect={onCheckout} /> : <CompactEmptyState title="暂无已上架套餐商品" description="管理员上架商品后会显示在这里。" />}
-                </div>
-            </div>
-        </section>
     );
 }
 

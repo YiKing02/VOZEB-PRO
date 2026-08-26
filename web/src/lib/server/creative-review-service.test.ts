@@ -6,6 +6,7 @@ vi.mock("@/lib/auth/store", () => ({ getAuthSettings, refundUserPoints }));
 vi.mock("@/lib/server/internal-origin", () => ({ fetchInternalApi }));
 vi.mock("@/lib/server/logical-model-router", () => ({ resolveLogicalModel }));
 vi.mock("@/lib/server/structured-model-output", () => ({ strictJsonObjectText: (value: unknown) => (typeof value === "string" ? value : "") }));
+vi.mock("@/lib/server/user-newapi-config", () => ({ getUserGenerationSettings: vi.fn(async (settings: unknown) => settings) }));
 
 import { reviewCreativeOutputs } from "./creative-review-service";
 

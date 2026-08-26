@@ -207,6 +207,30 @@ describe("video task upstream reconciliation", () => {
         expect(mocks.fetchInternalApi).toHaveBeenCalledWith(`http://localhost${task.config.baseUrl}/v1/videos/${task.upstream.id}/content`, expect.objectContaining({ method: "HEAD" }));
     });
 
+    it("probes the New API content endpoint when a completed status has no inline URL", async () => {
+        const task = videoTask({
+            config: {
+                ...videoTask().config,
+                advancedConfig: { protocol: "newapi", queryPath: "/v1/videos/:task_id" } as NonNullable<VideoTask["config"]["advancedConfig"]>,
+            },
+        });
+        mocks.fetchInternalApi.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+            if (String(url).endsWith(`/v1/videos/${task.upstream.id}`)) return json({ id: task.upstream.id, status: "completed" });
+            if (String(url).endsWith(`/v1/videos/${task.upstream.id}/content`) && init?.method === "HEAD") {
+                return new Response(null, { status: 200, headers: { "content-type": "video/mp4" } });
+            }
+            return json({ error: { message: "not found" } }, 404);
+        });
+
+        await expect(queryVideoTaskUpstream(task, "http://localhost", "session=test")).resolves.toEqual({
+            state: "result_ready",
+            status: "completed",
+            resultUrl: `/v1/videos/${task.upstream.id}/content`,
+        });
+        expect(mocks.fetchInternalApi).toHaveBeenCalledWith(`http://localhost${task.config.baseUrl}/v1/videos/${task.upstream.id}`, expect.anything());
+        expect(mocks.fetchInternalApi).toHaveBeenCalledWith(`http://localhost${task.config.baseUrl}/v1/videos/${task.upstream.id}/content`, expect.objectContaining({ method: "HEAD" }));
+    });
+
     it("ignores an HTML fallback page before probing the standard video content endpoint", async () => {
         const task = videoTask();
         mocks.fetchInternalApi.mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {

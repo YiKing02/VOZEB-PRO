@@ -60,6 +60,7 @@ import {
 } from "./image-task-types";
 import { runGenerationTaskRecoveryBatch } from "@/lib/server/generation-task-recovery-service";
 import { scheduleGenerationTask } from "@/lib/server/generation-task-scheduler";
+import { getUserGenerationSettings } from "@/lib/server/user-newapi-config";
 import {
     publicTask,
     sanitizeConfigs,
@@ -160,7 +161,7 @@ export async function POST(request: Request) {
         ...(headerAttemptNo ? { attemptNo: headerAttemptNo } : {}),
         ...(layerGrant ? { concurrencyClass: "canvas-layer" as const } : {}),
     };
-    const settings = await getAuthSettings();
+    const settings = await getUserGenerationSettings(await getAuthSettings(), currentUser.id);
     const createTask = async () => {
         const configs = sanitizeConfigs(resolvedBody.config, settings);
         const prompt = (resolvedBody.prompt || "").trim();

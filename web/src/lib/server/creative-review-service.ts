@@ -6,6 +6,7 @@ import { fetchOptionalResponses } from "@/lib/server/responses-request";
 import { TEXT_MODEL_REQUEST_TIMEOUT_MS } from "@/lib/server/model-request-policy";
 import { strictJsonObjectText } from "@/lib/server/structured-model-output";
 import { hasSystemAiCharge, readSystemAiBilling, systemAiBillingHeaders, systemAiIdempotencyKey, type SystemAiBilling } from "@/lib/server/system-ai-billing";
+import { getUserGenerationSettings } from "@/lib/server/user-newapi-config";
 import { resolveSiteTitle } from "@/lib/site-brand";
 
 export type CreativeReviewTaskInput = {
@@ -25,7 +26,7 @@ export async function reviewCreativeOutputs(input: { origin: string; cookie: str
     const hasTextResult = input.tasks.some((task) => task.type === "text" && task.resultSummary.trim());
     if (!imageInputs.length && !hasTextResult) return unavailableCreativeReview("当前产物没有可供默认文本模型检查的图片或文本内容，生成结果已保留，但本轮未完成视觉复盘。");
 
-    const settings = await getAuthSettings();
+    const settings = await getUserGenerationSettings(await getAuthSettings(), input.userId);
     const model = settings.defaultModels.textModel;
     const resolved = resolveLogicalModel(settings, "text", model);
     if (!model || !resolved?.channel) return unavailableCreativeReview("后台没有可用的默认文本模型，生成结果已保留，但本轮未执行自动复盘。");

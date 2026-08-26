@@ -16,6 +16,7 @@ vi.mock("@/lib/auth/store", () => ({
 }));
 vi.mock("@/lib/server/internal-origin", () => ({ fetchInternalApi: mocks.fetchInternalApi }));
 vi.mock("@/lib/server/logical-model-router", () => ({ resolveLogicalModelCandidates: mocks.resolveLogicalModelCandidates }));
+vi.mock("@/lib/server/user-newapi-config", () => ({ getUserGenerationSettings: vi.fn(async (settings: unknown) => settings) }));
 
 import { decomposeCanvasImage } from "./canvas-image-decomposition-service";
 

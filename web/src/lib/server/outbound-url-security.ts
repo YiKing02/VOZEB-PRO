@@ -52,7 +52,7 @@ export type SafeOutboundTarget = {
     family: 4 | 6;
 };
 
-export async function resolveSafeOutboundTarget(value: string | URL, options?: { allowCredentials?: boolean }): Promise<SafeOutboundTarget | null> {
+export async function resolveSafeOutboundTarget(value: string | URL, options?: { allowCredentials?: boolean; allowPrivateUpstreams?: boolean }): Promise<SafeOutboundTarget | null> {
     let url: URL;
     try {
         url = value instanceof URL ? new URL(value) : new URL(value);
@@ -64,7 +64,7 @@ export async function resolveSafeOutboundTarget(value: string | URL, options?: {
 
     const hostname = normalizeHostname(url.hostname);
     if (!hostname || isBlockedHostname(hostname)) return null;
-    const privateAllowed = privateUpstreamHostAllowed(hostname);
+    const privateAllowed = options?.allowPrivateUpstreams !== false && privateUpstreamHostAllowed(hostname);
     if ((hostname === "localhost" || hostname.endsWith(".localhost")) && !privateAllowed) return null;
     const directFamily = isIP(hostname);
     if (directFamily) return addressAllowed(hostname, privateAllowed) ? { url, address: hostname, family: directFamily as 4 | 6 } : null;
@@ -78,7 +78,7 @@ export async function resolveSafeOutboundTarget(value: string | URL, options?: {
     }
 }
 
-export async function isSafeOutboundUrl(value: string, options?: { allowCredentials?: boolean }) {
+export async function isSafeOutboundUrl(value: string, options?: { allowCredentials?: boolean; allowPrivateUpstreams?: boolean }) {
     return Boolean(await resolveSafeOutboundTarget(value, options));
 }
 

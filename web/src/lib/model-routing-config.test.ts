@@ -10,6 +10,7 @@ import {
     modelRoutingValidationErrors,
     normalizeDefaultModelsConfig,
     normalizeLogicalModelsConfig,
+    resolveLogicalModelCapabilityProfile,
     resolveLogicalModelConfig,
     synchronizeLogicalModelsWithChannels,
 } from "./model-routing-config";
@@ -51,6 +52,21 @@ describe("model routing config", () => {
         expect(models.find((model) => model.id === "seedance-2.0")?.capability).toBe("video");
         expect(models.find((model) => model.id === "stable-diffusion-2.0")?.capability).toBe("image");
         expect(models.find((model) => model.id === "sdxl")?.capability).toBe("image");
+    });
+
+    it("classifies MiniMax H3 and Kling models with their documented resolutions", () => {
+        const source = channel("video", ["MiniMaxH3-2k-pro", "MiniMaxH3-720p-sec", "kling-video-v3", "kling-video-v3-omni", "kling-video-v3-turbo"]);
+        const models = deriveLogicalModelsConfig([source]);
+
+        expect(models.every((model) => model.capability === "video")).toBe(true);
+        const profile = (model: string) => resolveLogicalModelCapabilityProfile({}, "video", undefined, model)?.resolutions;
+        expect(profile("MiniMaxH3-2k-pro")).toEqual(["2K"]);
+        expect(profile("MiniMaxH3-720p-sec")).toEqual(["720"]);
+        expect(profile("kling-video-v3")).toEqual(["720", "1080", "4K"]);
+        expect(profile("kling-video-v3-omni")).toEqual(["720", "1080", "4K"]);
+        expect(profile("kling-video-v3-turbo")).toEqual(["720", "1080"]);
+        expect(models.find((model) => model.id === "MiniMaxH3-2k-pro")?.bindings[0]?.capabilityProfile?.resolutions).toEqual(["2K"]);
+        expect(models.find((model) => model.id === "kling-video-v3")?.bindings[0]?.capabilityProfile?.resolutions).toEqual(["720", "1080", "4K"]);
     });
 
     it("keeps an explicitly selected logical model capability", () => {

@@ -12,6 +12,7 @@ import { strictJsonObjectText } from "@/lib/server/structured-model-output";
 import { hasSystemAiCharge, readSystemAiBilling, systemAiBillingHeaders, systemAiIdempotencyKey } from "@/lib/server/system-ai-billing";
 import { rankTextPlanningCandidates } from "@/lib/server/text-planning-runtime";
 import { resolveTextProtocol } from "@/lib/server/text-protocol-resolver";
+import { getUserGenerationSettings } from "@/lib/server/user-newapi-config";
 
 type SourceImage = { dataUrl: string; mimeType: string; width: number; height: number };
 type VisionCall = { arguments: string; headers: Headers };
@@ -27,7 +28,7 @@ export class CanvasImageDecompositionError extends Error {
 }
 
 export async function decomposeCanvasImage(input: { origin: string; cookie: string; userId: string; requestId: string; source: string }): Promise<CanvasImageDecomposition> {
-    const [settings, source] = await Promise.all([getAuthSettings(), readSourceImage(input.source, input.origin, input.cookie)]);
+    const [settings, source] = await Promise.all([getAuthSettings().then((value) => getUserGenerationSettings(value, input.userId)), readSourceImage(input.source, input.origin, input.cookie)]);
     const model = settings.defaultModels.textModel;
     const candidates = resolveLogicalModelCandidates(settings, "text", model);
     if (!model || !candidates.length) throw new CanvasImageDecompositionError("后台尚未配置可用的默认文本模型", 503);

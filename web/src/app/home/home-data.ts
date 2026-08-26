@@ -17,14 +17,13 @@ export type HomeSiteSettings = {
 export type HomeNavigationItem = {
     label: string;
     href: string;
-    action: "link" | "protected" | "billing";
+    action: "link" | "protected";
 };
 
 export const HOME_NAVIGATION = [
     { label: "创作 Agent", href: "/create", action: "protected" },
     { label: "短剧制作", href: "/drama", action: "protected" },
     { label: "作品广场", href: "/gallery", action: "link" },
-    { label: "价格方案", href: "/billing", action: "billing" },
 ] as const satisfies readonly HomeNavigationItem[];
 
 export const HOME_CREATION_MODES = [

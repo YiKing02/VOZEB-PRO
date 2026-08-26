@@ -45,7 +45,7 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         const handleMissingConfig = () => {
-            message.warning("请联系管理员在后台配置可用模型渠道");
+            message.warning("请先在个人中心配置 New API URL 与 Key");
         };
         window.addEventListener("vozeb-pro-system-config-missing", handleMissingConfig);
         return () => window.removeEventListener("vozeb-pro-system-config-missing", handleMissingConfig);

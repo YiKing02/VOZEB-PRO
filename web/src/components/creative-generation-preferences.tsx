@@ -63,6 +63,12 @@ const imageQualityOptions = [
     { value: "low", label: "低画质", shortLabel: "低" },
 ] as const;
 
+const imageResolutionOptions = [
+    { value: "1K", label: "1K" },
+    { value: "2K", label: "2K" },
+    { value: "4K", label: "4K" },
+] as const;
+
 const videoQualityOptions = [
     { value: "auto", label: "智能清晰度", shortLabel: "智能" },
     { value: "480", label: "480P", shortLabel: "480P" },
@@ -144,6 +150,25 @@ function normalizedRatio(value: string) {
     if (parts.length !== 2 || !parts.every((part) => Number.isFinite(part) && part > 0)) return ratio.toLowerCase();
     const divisor = greatestCommonDivisor(parts[0], parts[1]);
     return `${parts[0] / divisor}:${parts[1] / divisor}`;
+}
+
+export function imageResolutionForSize(size: string): "1K" | "2K" | "4K" {
+    const dimensions = parseCustomDimensions(size);
+    if (!dimensions) return "1K";
+    const longest = Math.max(Number(dimensions[0]), Number(dimensions[1]));
+    if (longest >= 3072) return "4K";
+    if (longest >= 1536) return "2K";
+    return "1K";
+}
+
+export function imageSizeForResolution(resolution: "1K" | "2K" | "4K", currentSize: string) {
+    const current = parseCustomDimensions(currentSize);
+    const ratioMatch = currentSize.match(/^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/);
+    const ratio = current ? Number(current[0]) / Number(current[1]) : ratioMatch ? Number(ratioMatch[1]) / Number(ratioMatch[2]) : 1;
+    const longEdge = resolution === "4K" ? 4096 : resolution === "2K" ? 2048 : 1024;
+    const width = ratio >= 1 ? longEdge : Math.max(1, Math.round(longEdge * ratio));
+    const height = ratio >= 1 ? Math.max(1, Math.round(longEdge / ratio)) : longEdge;
+    return `${width}x${height}`;
 }
 
 function greatestCommonDivisor(left: number, right: number): number {
@@ -340,11 +365,12 @@ function PreferencePanel({
     const selectedCount = capability === "image" ? preferences.image?.count || 1 : preferences.video?.count || 1;
     const standardRatios = ratios.filter((ratio) => !parseCustomDimensions(ratio.value));
     const highResolutionRatios = ratios.filter((ratio) => parseCustomDimensions(ratio.value));
+    const selectedImageResolution = capability === "image" ? imageResolutionForSize(selectedSize) : null;
     const [customEditorOpen, setCustomEditorOpen] = useState(Boolean(parseCustomDimensions(selectedSize)) && !isPresetMediaSize(capability, selectedSize));
     const [section, setSection] = useState<"canvas" | "output">("canvas");
 
     useEffect(() => {
-        setCustomEditorOpen(Boolean(parseCustomDimensions(selectedSize)) && !isPresetMediaSize(capability, selectedSize));
+        if (selectedSize === "auto" || isPresetMediaSize(capability, selectedSize)) setCustomEditorOpen(false);
     }, [capability, selectedSize]);
 
     useEffect(() => {
@@ -404,6 +430,16 @@ function PreferencePanel({
                         </div>
                     ) : (
                         <div className="grid min-w-0 gap-1.5">
+                            {capability === "image" ? (
+                                <CompactOptionGroup
+                                    label="基准分辨率"
+                                    ariaLabel="选择图片基准分辨率"
+                                    value={selectedImageResolution || "1K"}
+                                    options={imageResolutionOptions}
+                                    columns={3}
+                                    onChange={(resolution) => onChange({ size: imageSizeForResolution(resolution, selectedSize) })}
+                                />
+                            ) : null}
                             <div className="flex items-center justify-between gap-3">
                                 <p className="text-[11px] font-medium text-[#7b8591] dark:text-[#98a2ae]">比例</p>
                                 <span className="text-[10px] text-[#a0a8b2] dark:text-[#707b88]">{selectedSize === "auto" ? "智能" : formatSizeLabel(selectedSize, capability)}</span>
@@ -416,13 +452,13 @@ function PreferencePanel({
                                         className={cn(
                                             "inline-flex min-w-0 items-center justify-center gap-1 rounded-lg px-1 text-[11px] transition",
                                             compact ? "h-8" : "h-9",
-                                            selectedSize === ratio.value
+                                            selectedSize === ratio.value || (capability === "image" && selectedSize !== "auto" && normalizedRatio(selectedSize) === normalizedRatio(ratio.value))
                                                 ? "bg-[#eaf1f5] font-medium text-[#315d78] dark:bg-[#2a3b46] dark:text-[#a8c8dc]"
                                                 : "bg-[#f5f6f7] text-[#687481] hover:bg-[#edf0f2] hover:text-[#20242a] dark:bg-[#24282e] dark:text-[#a6afb9] dark:hover:bg-[#30363e] dark:hover:text-white",
                                         )}
-                                        onClick={() => onChange({ size: ratio.value })}
+                                        onClick={() => onChange({ size: capability === "image" ? (ratio.value === "auto" ? "auto" : imageSizeForResolution(selectedImageResolution || "1K", ratio.value)) : ratio.value })}
                                         aria-label={`选择${capability === "image" ? "图片" : "视频"}比例 ${ratio.label}`}
-                                        aria-pressed={selectedSize === ratio.value}
+                                        aria-pressed={selectedSize === ratio.value || (capability === "image" && selectedSize !== "auto" && normalizedRatio(selectedSize) === normalizedRatio(ratio.value))}
                                     >
                                         <span className="grid h-4 w-5 shrink-0 place-items-center">
                                             {ratio.value === "auto" ? <Sparkles className="size-3.5" /> : <span className="rounded-[2px] border-[1.5px] border-current" style={{ width: ratio.width * 0.64, height: ratio.height * 0.64 }} />}

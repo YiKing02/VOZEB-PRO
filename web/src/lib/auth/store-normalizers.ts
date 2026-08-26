@@ -245,7 +245,7 @@ export function normalizeSettings(settings: AuthSettings): AuthSettings {
         freeDailyPointsEnabled: settings.freeDailyPointsEnabled !== false,
         freeDailyPoints: normalizePoints(settings.freeDailyPoints, 0),
         mail: normalizeMailSettings(settings.mail, site.title),
-        allowUserApiConfig: false,
+        allowUserApiConfig: Boolean(settings.allowUserApiConfig),
         modelPointCosts: normalizeModelPointCosts(settings.modelPointCosts),
         generationPointMultipliers: normalizeGenerationPointMultipliers(settings.generationPointMultipliers),
         generationCostControl: normalizeGenerationCostControl(settings.generationCostControl),

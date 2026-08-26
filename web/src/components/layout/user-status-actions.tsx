@@ -2,16 +2,14 @@
 
 import type { CSSProperties } from "react";
 import { useEffect, useRef, useState } from "react";
-import { ChevronRight, CreditCard, Crown, Gift, Keyboard, LogOut, ShieldCheck, UserCircle } from "lucide-react";
+import { Keyboard, LogOut, ShieldCheck, UserCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { MenuProps } from "antd";
-import { App, Button, Dropdown, Input, Popover } from "antd";
+import { App, Dropdown } from "antd";
 
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
-import { BillingPlansModal } from "@/components/billing/billing-plans-modal";
 import { AnnouncementNotificationCenter } from "@/components/layout/announcement-notification-center";
-import { CreditSymbol, formatCreditAmount } from "@/constant/credits";
 import { cn } from "@/lib/utils";
 import { userAvatarFallback } from "@/lib/user-avatar";
 import { canvasThemes } from "@/lib/canvas-theme";
@@ -28,10 +26,8 @@ type UserStatusActionsProps = {
 export function UserStatusActions({ variant = "default", onOpenShortcuts, initialUser }: UserStatusActionsProps) {
     const router = useRouter();
     const { message } = App.useApp();
-    const [pointsOpen, setPointsOpen] = useState(false);
     const [accountOpen, setAccountOpen] = useState(false);
     const [isCompactViewport, setIsCompactViewport] = useState(false);
-    const [plansOpen, setPlansOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement>(null);
     const storeUser = useUserStore((state) => state.user);
     const user = storeUser || initialUser || null;
@@ -58,7 +54,6 @@ export function UserStatusActions({ variant = "default", onOpenShortcuts, initia
     const avatarFallback = userAvatarFallback(user?.displayName || user?.username || "用户");
     const accountName = user?.displayName || user?.username || "用户";
     const accountSecondary = user ? `ID：${user.accountId}` : "";
-    const planActionLabel = user?.hasActivePlan ? "续费套餐" : "升级套餐";
     const accountItems: MenuProps["items"] = [
         {
             type: "group",
@@ -79,35 +74,6 @@ export function UserStatusActions({ variant = "default", onOpenShortcuts, initia
                             ) : null}
                         </div>
                     </div>
-                    <div className="mt-2.5 rounded-lg border border-stone-200 bg-stone-50 p-2.5 dark:border-stone-800 dark:bg-stone-900/70">
-                        <div className="flex items-center justify-between gap-3">
-                            <div className="min-w-0">
-                                <div className="text-[11px] text-stone-400 dark:text-stone-500">当前套餐</div>
-                                <div className="mt-0.5 truncate text-sm font-semibold text-stone-900 dark:text-stone-100">{user?.planName || user?.planId || "免费版"}</div>
-                            </div>
-                            <button
-                                type="button"
-                                className="account-upgrade-button inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-md bg-stone-950 px-2.5 text-[11px] font-semibold transition hover:bg-black dark:bg-white dark:hover:bg-stone-100"
-                                aria-label={planActionLabel}
-                                title={planActionLabel}
-                                onClick={(event) => {
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    setAccountOpen(false);
-                                    setPlansOpen(true);
-                                }}
-                            >
-                                <Crown className="size-3.5" /> {planActionLabel}
-                            </button>
-                        </div>
-                        <div className="mt-2 flex items-center justify-between gap-3 border-t border-stone-200 pt-2 text-xs dark:border-stone-800">
-                            <span className="text-stone-500 dark:text-stone-400">积分余额</span>
-                            <span className="inline-flex shrink-0 items-center gap-1.5 font-semibold text-stone-900 dark:text-stone-100">
-                                <CreditSymbol className="text-sm text-[#66758e] dark:text-[#d8dee8]" />
-                                {formatCreditAmount(user?.pointsBalance || 0)}
-                            </span>
-                        </div>
-                    </div>
                 </div>
             ),
             children: [],
@@ -119,15 +85,6 @@ export function UserStatusActions({ variant = "default", onOpenShortcuts, initia
             label: (
                 <Link href="/profile" prefetch onMouseEnter={() => router.prefetch("/profile")} onFocus={() => router.prefetch("/profile")}>
                     个人中心
-                </Link>
-            ),
-        },
-        {
-            key: "billing",
-            icon: <CreditCard className="size-4" />,
-            label: (
-                <Link href="/profile?section=billing" prefetch onMouseEnter={() => router.prefetch("/profile?section=billing")} onFocus={() => router.prefetch("/profile?section=billing")}>
-                    套餐中心
                 </Link>
             ),
         },
@@ -188,70 +145,31 @@ export function UserStatusActions({ variant = "default", onOpenShortcuts, initia
     };
 
     useEffect(() => {
-        if (variant !== "canvas" || (!pointsOpen && !accountOpen)) return;
+        if (variant !== "canvas" || !accountOpen) return;
         const closeCanvasPopups = (event: PointerEvent) => {
             const target = event.target;
             if (!(target instanceof Node)) return;
             if (rootRef.current?.contains(target)) return;
-            if (target instanceof Element && target.closest(".user-points-popover, .ant-dropdown, .ant-dropdown-menu, .ant-dropdown-menu-submenu, .ant-dropdown-menu-submenu-popup")) {
+            if (target instanceof Element && target.closest(".ant-dropdown, .ant-dropdown-menu, .ant-dropdown-menu-submenu, .ant-dropdown-menu-submenu-popup")) {
                 return;
             }
-            setPointsOpen(false);
             setAccountOpen(false);
         };
         document.addEventListener("pointerdown", closeCanvasPopups, true);
         return () => document.removeEventListener("pointerdown", closeCanvasPopups, true);
-    }, [variant, pointsOpen, accountOpen]);
+    }, [variant, accountOpen]);
 
     const handleAccountOpenChange = (open: boolean) => {
         setAccountOpen(open);
-        if (open) setPointsOpen(false);
     };
-
-    const pointsButton = user ? (
-        <button
-            type="button"
-            className={cn(variant === "canvas" ? canvasControlClass : defaultControlClass, "gap-1 px-2 text-xs font-semibold sm:gap-1.5 sm:px-2.5", variant === "canvas" ? "canvas-points-action" : "app-points-action shrink-0")}
-            style={iconStyle}
-            title="积分余额"
-        >
-            <CreditSymbol className="text-sm" />
-            {formatCreditAmount(user.pointsBalance)}
-        </button>
-    ) : null;
 
     return (
         <div ref={rootRef} className={cn("user-status-actions inline-flex max-w-full items-center gap-1.5 sm:gap-2", variant === "canvas" ? "canvas-user-status-actions shrink-0" : "app-user-status-actions min-w-0")}>
-            {user ? (
-                <Popover
-                    rootClassName="user-points-popover"
-                    open={pointsOpen}
-                    onOpenChange={(open) => {
-                        setPointsOpen(open);
-                        if (open) setAccountOpen(false);
-                    }}
-                    trigger="click"
-                    placement="bottomRight"
-                    content={
-                        <PointsSummaryPanel
-                            user={user}
-                            onClose={() => setPointsOpen(false)}
-                            onUpgrade={() => {
-                                setPointsOpen(false);
-                                setPlansOpen(true);
-                            }}
-                        />
-                    }
-                >
-                    {pointsButton}
-                </Popover>
-            ) : null}
             <AnnouncementNotificationCenter
                 compact={isCompactViewport}
                 buttonClassName={cn(naturalIconClass, variant === "canvas" ? "canvas-notification-action" : "app-notification-action")}
                 buttonStyle={iconStyle}
                 onOpen={() => {
-                    setPointsOpen(false);
                     setAccountOpen(false);
                 }}
             />
@@ -302,116 +220,6 @@ export function UserStatusActions({ variant = "default", onOpenShortcuts, initia
                     <Keyboard className="size-4" />
                 </button>
             ) : null}
-            <BillingPlansModal
-                open={plansOpen}
-                onClose={() => setPlansOpen(false)}
-                onSelect={(product) => {
-                    router.push(`/billing/checkout?product=${encodeURIComponent(product.id)}`);
-                }}
-            />
-        </div>
-    );
-}
-
-function PointsSummaryPanel({ user, onClose, onUpgrade }: { user: LocalUser; onClose: () => void; onUpgrade: () => void }) {
-    const { message } = App.useApp();
-    const setUser = useUserStore((state) => state.setUser);
-    const [code, setCode] = useState("");
-    const [redeeming, setRedeeming] = useState(false);
-    const [recordTotal, setRecordTotal] = useState<number>();
-    useEffect(() => {
-        let active = true;
-        void fetch("/api/points?page=1&pageSize=1", { cache: "no-store" })
-            .then((response) => response.json())
-            .then((payload: { total?: number }) => {
-                if (active && Number.isFinite(payload.total)) setRecordTotal(Number(payload.total));
-            })
-            .catch(() => undefined);
-        return () => {
-            active = false;
-        };
-    }, [user.id]);
-    const redeemCode = async () => {
-        const value = code.trim();
-        if (!value || redeeming) return;
-        setRedeeming(true);
-        try {
-            const response = await fetch("/api/cdk/redeem", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ code: value }),
-            });
-            const payload = (await response.json()) as { user?: LocalUser; points?: number; error?: string };
-            if (!response.ok || !payload.user) throw new Error(payload.error || "兑换失败");
-            setUser(payload.user);
-            setCode("");
-            message.success(`兑换成功，获得 ${formatCreditAmount(payload.points || 0)} 积分`);
-        } catch (error) {
-            message.error(error instanceof Error ? error.message : "兑换失败");
-        } finally {
-            setRedeeming(false);
-        }
-    };
-
-    return (
-        <div className="user-points-panel w-[min(19rem,calc(100vw-2rem))] text-stone-950 dark:text-stone-100">
-            <div className="flex items-start justify-between gap-3 px-0.5 pb-2.5">
-                <div className="min-w-0">
-                    <div className="text-base font-semibold leading-6">积分记录</div>
-                    <div className="mt-0.5 text-[11px] leading-4 text-stone-500 dark:text-stone-400">{recordTotal === undefined ? "余额与使用记录" : `共 ${recordTotal} 条记录，按时间倒序`}</div>
-                </div>
-                <span className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-stone-200 bg-stone-50 px-2.5 text-xs font-medium text-stone-600 dark:border-stone-800 dark:bg-stone-900/70 dark:text-stone-300">
-                    <CreditSymbol className="text-sm text-sky-600 dark:text-sky-300" /> 余额 <strong className="text-sm text-stone-950 dark:text-stone-100">{formatCreditAmount(user.pointsBalance)}</strong>
-                </span>
-            </div>
-            <div className="grid grid-cols-2 border-y border-stone-200 py-2 dark:border-stone-800">
-                <div className="border-r border-stone-200 pr-3 dark:border-stone-800">
-                    <div className="flex items-baseline justify-between gap-2">
-                        <span className="text-[11px] text-stone-500 dark:text-stone-400">今日可用</span>
-                        <strong className="shrink-0 text-sm font-semibold tabular-nums">{formatCreditAmount(user.dailyPointsBalance || 0)}</strong>
-                    </div>
-                </div>
-                <div className="pl-3">
-                    <div className="flex items-baseline justify-between gap-2">
-                        <span className="text-[11px] text-stone-500 dark:text-stone-400">永久积分</span>
-                        <strong className="shrink-0 text-sm font-semibold tabular-nums">{formatCreditAmount(user.permanentPointsBalance ?? Math.max(0, user.pointsBalance - (user.dailyPointsBalance || 0)))}</strong>
-                    </div>
-                </div>
-            </div>
-            <div className="py-2.5">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                    <span className="inline-flex items-center gap-2 text-sm font-semibold text-stone-800 dark:text-stone-100">
-                        <Gift className="size-4 text-sky-600 dark:text-sky-300" /> CDK 兑换
-                    </span>
-                    <span className="text-[11px] text-stone-400 dark:text-stone-500">兑换后自动刷新</span>
-                </div>
-                <Input.Search
-                    className="points-cdk-search"
-                    size="small"
-                    value={code}
-                    placeholder="输入兑换密钥"
-                    enterButton={
-                        <Button type="primary" size="small" loading={redeeming}>
-                            兑换
-                        </Button>
-                    }
-                    onChange={(event) => setCode(event.target.value)}
-                    onSearch={() => void redeemCode()}
-                />
-            </div>
-            <Button
-                block
-                type="primary"
-                icon={<CreditCard className="size-4" />}
-                onClick={onUpgrade}
-                className="points-summary-purchase !flex !h-9 !items-center !justify-center !gap-2 !rounded-lg !border-stone-950 !bg-stone-950 !px-3 !text-xs !font-semibold !text-white !shadow-none hover:!border-black hover:!bg-black hover:!text-white dark:!border-white dark:!bg-white dark:!text-stone-950 dark:hover:!border-stone-100 dark:hover:!bg-stone-100 dark:hover:!text-stone-950"
-            >
-                购买积分与套餐
-            </Button>
-            <Link href="/profile?section=consume" onClick={onClose} className="mt-1 flex min-h-9 items-center justify-between rounded-lg px-2 text-sm font-medium text-stone-800 transition hover:bg-stone-100 dark:text-stone-100 dark:hover:bg-stone-800/80">
-                使用详情
-                <ChevronRight className="size-4 text-stone-400" />
-            </Link>
         </div>
     );
 }

@@ -47,6 +47,23 @@ const openAiOperations: ChannelProtocolDefinition["operations"] = {
     audio: { capability: "audio", createPath: "/audio/speech", requestTemplate: '{"model":"{{model}}","input":"{{prompt}}","voice":"alloy","response_format":"mp3"}', resultField: "binary" },
 };
 
+const newApiImageOperation: ProtocolOperation = {
+    capability: "image",
+    createPath: "/images/generations/async",
+    editPath: "/images/edits/async",
+    queryPath: "/images/tasks/:task_id",
+    requestTemplate: '{"model":"{{model}}","prompt":"{{prompt}}","size":"{{size}}","quality":"{{quality}}"}',
+    resultField: "result.data[0].url / result.data[0].b64_json",
+    statusField: "status",
+    referenceRule: "文生图使用 JSON 请求体 /images/generations/async；图像编辑使用 /images/edits/async multipart/form-data；查询 GET /images/tasks/:task_id。状态为 running、success 或 failed。",
+    supportsReferenceImage: true,
+};
+
+const newApiOperations: ChannelProtocolDefinition["operations"] = {
+    ...openAiOperations,
+    image: newApiImageOperation,
+};
+
 const geminiVideoOperation: ProtocolOperation = {
     capability: "video",
     createPath: "/models/:model:predictLongRunning",
@@ -217,7 +234,7 @@ export const registeredChannelProtocolDefinitions: ChannelProtocolDefinition[] =
         authMode: "bearer",
         modelCatalogPaths: ["/v1/models"],
         capabilities: ["text", "image", "video", "audio"],
-        operations: openAiOperations,
+        operations: newApiOperations,
         strict: true,
     },
     {

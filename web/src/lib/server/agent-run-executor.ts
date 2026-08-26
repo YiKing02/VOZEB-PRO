@@ -17,6 +17,7 @@ import { buildAgentRunPlannerAudit } from "@/lib/server/agent-run-audit";
 import { agentRequestDigest, buildAgentRequest, serializeAgentRequest } from "@/lib/server/agent-prompt-json";
 import { orderCreativeAssetsByIds } from "@/lib/creative-asset-references";
 import { withDirectAgentExecutionContext } from "./agent-run-direct-context";
+import { getUserGenerationSettings } from "@/lib/server/user-newapi-config";
 
 const globalAgentExecutors = globalThis as typeof globalThis & { __vozebProAgentRunControllers?: Map<string, AbortController> };
 const controllers = (globalAgentExecutors.__vozebProAgentRunControllers ??= new Map<string, AbortController>());
@@ -49,14 +50,14 @@ export async function executeAgentRun(run: AgentRun, origin: string, cookie: str
         if (!claimed) return;
         if (claimed.tasks.length) {
             failureStage = "task_execution";
-            const settings = await getAuthSettings();
+            const settings = await getUserGenerationSettings(await getAuthSettings(), claimed.userId);
             await executeTasks(run.id, origin, cookie, executionId, settings);
             return;
         }
         const directModelSelection = Boolean(claimed.requestedModelIds?.length);
         const usesMemoryCandidates = !directModelSelection && claimed.surface === "chat" && claimed.referencedAssetIds.length === 0;
         const [settings, loadedExplicitAssets, conversationContext, memoryAssets] = await Promise.all([
-            getAuthSettings(),
+            getAuthSettings().then((settings) => getUserGenerationSettings(settings, claimed.userId)),
             getCreativeAssetsByIds(claimed.referencedAssetIds, claimed.userId),
             getCreativeConversationContext(claimed.conversationId, claimed.userId, claimed.id),
             usesMemoryCandidates ? listRecentCreativeMediaAssets(claimed.conversationId, claimed.userId, 6) : Promise.resolve([]),
